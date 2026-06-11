@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+:root {
+  /* Light theme — matches goflydragon.com (white bg, near-black text,
+     FlyDragon orange accent). Switched 2026-05-30; if you flip back to
+     dark, also flip the bulk zinc-class swap in components/. */
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  /* Brand primary. FlyDragon orange — same on both themes.
+     Class names stayed `text-gold` / `bg-gold` to avoid a wide rename —
+     internally "gold" means "brand orange". */
+  --gold: #ff6b35;
+  /* Brand red (deep) from the dragon logo gradient. Used for error /
+     danger states (pill backgrounds, stuck-run indicators). */
+  --accent: #b91f23;
+  /* Muted secondary text. zinc-500 reads cleanly on white and on dark. */
+  --muted: #71717a;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-gold: var(--gold);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
