@@ -15,6 +15,10 @@ export const KIND_COLOR: Record<CitationKind, string> = {
   knowledge_graph: "rgb(20 184 166)", // teal-green (Google surface, near GBP)
   brokerage: "rgb(244 114 182)",    // pink
   local_media: "rgb(251 146 60)",   // orange
+  // Saturated blue — distinct from indigo (portal) and sky (review).
+  // Trade-press editorial gets a "journalistic" hue that reads as
+  // serious next to the listicle rose and PR amber.
+  industry_news: "rgb(37 99 235)",  // blue-600
   video: "rgb(248 113 113)",        // red
   social: "rgb(167 139 250)",       // purple
   review: "rgb(56 189 248)",        // sky
@@ -50,6 +54,7 @@ export const KIND_ORDER: CitationKind[] = [
   "video",
   "social",
   "review",
+  "industry_news",
   "directory",
   "pr",
   "listicle",

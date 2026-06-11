@@ -30,6 +30,7 @@ export type CitationKind =
   | "listicle"
   | "social"
   | "local_media"
+  | "industry_news"
   | "wiki"
   | "government"
   | "jobs"
@@ -49,6 +50,7 @@ export const SELECTABLE_KINDS: CitationKind[] = [
   "pr",
   "social",
   "local_media",
+  "industry_news",
   "wiki",
   "video",
   "gbp",
@@ -90,6 +92,7 @@ export const CITATION_KIND_LABEL: Record<CitationKind, string> = {
   listicle: "Listicle / guest post",
   social: "Social",
   local_media: "Local media",
+  industry_news: "Industry news",
   wiki: "Wikipedia",
   government: "Government / housing authority",
   jobs: "Jobs / careers",
@@ -342,11 +345,55 @@ const LOCAL_MEDIA_DOMAINS: Record<string, string> = {
   "bostonmagazine.com": "boston_magazine",
   "texasmonthly.com": "texas_monthly",
   "newsweek.com": "newsweek",
-  "therealdeal.com": "the_real_deal",
   "mainlinetoday.com": "main_line_today",
   "palmspringslife.com": "palm_springs_life",
   "localprofile.com": "local_profile",
 };
+
+/**
+ * Real-estate trade press — editorial publications whose entire reason
+ * for existing is to cover the industry. Carries earned-media weight that
+ * `pr` (wire placements) and `listicle` (paid "Top 10 Agents" posts)
+ * don't, and a strategically different audience from `local_media` (the
+ * general regional press that occasionally runs an agent profile).
+ *
+ * If a client appears in The Real Deal vs Patch.com, those are very
+ * different wins — the donut needs to split them.
+ */
+const INDUSTRY_NEWS_DOMAINS: Record<string, string> = {
+  // National / cross-market trade press
+  "inman.com": "inman",
+  "housingwire.com": "housingwire",
+  "rismedia.com": "rismedia",
+  "therealdeal.com": "the_real_deal",
+  "propmodo.com": "propmodo",
+  "realestatenews.com": "realestatenews",
+  "realtormag.realtor.org": "realtor_magazine",
+  "magazine.realtor": "realtor_magazine",
+  "nar.realtor": "nar",
+  "bisnow.com": "bisnow", // CRE-leaning but heavily real-estate editorial
+  "globest.com": "globest", // CRE trade
+  "connect.media": "connect_cre",
+  "rebusinessonline.com": "rebusinessonline",
+  "realestateweekly.com": "realestateweekly",
+  // realtrends.com is in DIRECTORY_DOMAINS as the rankings product —
+  // their editorial sister site is intentionally not split out here
+  // unless we see it as a distinct domain in real data.
+};
+
+/**
+ * Agent Publishing local-trade-press franchise — Boston Agent Magazine,
+ * South Florida Agent Magazine, Chicago Agent Magazine, etc. Same
+ * publisher, same editorial format, one regex covers all current and
+ * future cities (atlanta-, houston-, dallas-, phillyagentmagazine.com,
+ * …). These are trade publications written for and about agents, not
+ * general-audience local news — they belong in industry_news, not
+ * local_media.
+ */
+const INDUSTRY_NEWS_PATTERNS: RegExp[] = [
+  /(^|\.)[a-z]+agentmagazine\.com$/, // Agent Publishing city-magazine franchise
+  /(^|\.)agentadvice\.com$/,
+];
 
 /**
  * Forums / communities / misc non-source domains that would otherwise default
@@ -498,6 +545,22 @@ export function classifyCitation(c: {
   const portal = lookupWithRollup(domain, PORTALS);
   if (portal) {
     return { kind: "portal", brand: portal };
+  }
+
+  // 7a. Industry news — real-estate trade press. Checked BEFORE
+  //     local_media so the Agent Publishing franchise
+  //     (bostonagentmagazine.com etc.) doesn't get pulled into the
+  //     local_media regex via its `*magazine.com` suffix, and so The
+  //     Real Deal lands as trade press rather than "local" in any
+  //     market.
+  const industry = lookupWithRollup(domain, INDUSTRY_NEWS_DOMAINS);
+  if (industry) {
+    return { kind: "industry_news", brand: industry };
+  }
+  for (const pattern of INDUSTRY_NEWS_PATTERNS) {
+    if (pattern.test(domain)) {
+      return { kind: "industry_news", brand: null };
+    }
   }
 
   // 8. Local media — named publications first, then suffix patterns.
