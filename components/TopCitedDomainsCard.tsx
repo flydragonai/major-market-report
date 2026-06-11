@@ -61,9 +61,7 @@ const CITATION_KIND_SHORT: Record<NonNullable<CitedDomain["kind"]>, string> = {
   listicle: "Listicle",
   social: "Social",
   industry_news: "Industry",
-  wiki: "Wiki",
   government: "Gov",
-  jobs: "Jobs",
   other: "Other",
   unclassified: "?",
 };

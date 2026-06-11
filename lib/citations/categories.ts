@@ -30,9 +30,7 @@ export type CitationKind =
   | "listicle"
   | "social"
   | "industry_news"
-  | "wiki"
   | "government"
-  | "jobs"
   | "other"
   | "unclassified";
 
@@ -49,12 +47,10 @@ export const SELECTABLE_KINDS: CitationKind[] = [
   "pr",
   "social",
   "industry_news",
-  "wiki",
   "video",
   "gbp",
   "knowledge_graph",
   "government",
-  "jobs",
   "other",
 ];
 
@@ -98,9 +94,14 @@ export const CITATION_KIND_LABEL: Record<CitationKind, string> = {
   listicle: "Listicle / guest post",
   social: "Social",
   industry_news: "Industry news",
-  wiki: "Wikipedia",
   government: "Government / housing authority",
-  jobs: "Jobs / careers",
+  // `other` is the long-tail catch-all. Folded in: Wikipedia
+  // (brand-prefixed `wiki:`), jobs boards (`jobs:`), and the rest of
+  // the previously-distinct miscellany. Same reasoning as the
+  // local_media→pr collapse: those buckets were never load-bearing
+  // signals for the report's surfaces, and the long-tail "other" slice
+  // captures all of them adequately. Brand prefixes preserve the
+  // origin if we ever want to split them back.
   other: "Other",
   unclassified: "Unclassified",
 };
@@ -513,10 +514,13 @@ export function classifyCitation(c: {
     return { kind: "review", brand: review };
   }
 
-  // 5. Wikipedia
+  // 5. Wikipedia — rolled into `other` with brand prefix `wiki:` so the
+  //    origin survives the collapse. Was its own `wiki` kind before;
+  //    collapsed because the report's surfaces never differentiated it
+  //    from the long-tail. (See migration 0008.)
   for (const wd of Object.keys(WIKI_DOMAINS)) {
     if (domain === wd || domain.endsWith(`.${wd}`)) {
-      return { kind: "wiki", brand: WIKI_DOMAINS[wd] };
+      return { kind: "other", brand: `wiki:${WIKI_DOMAINS[wd]}` };
     }
   }
 
@@ -606,13 +610,20 @@ export function classifyCitation(c: {
     return { kind: "government", brand: null };
   }
 
-  // 8c. Jobs boards — explicit set, small and stable.
-  if (
-    /^(indeed|ziprecruiter|glassdoor|monster|simplyhired|linkedin)\.com$/.test(
-      domain,
-    )
-  ) {
-    return { kind: "jobs", brand: null };
+  // 8c. Jobs boards — rolled into `other` with brand prefix `jobs:` so
+  //      the origin survives the collapse. Was its own `jobs` kind
+  //      before; collapsed because real-estate-agent queries rarely
+  //      surface these and when they do it's signal-free noise (the
+  //      report doesn't care which job board mentioned the agent).
+  //      LinkedIn is intentionally included here even though
+  //      SOCIAL_DOMAINS would catch it first — kept as a belt-and-
+  //      suspenders fallback in case the social registry is edited.
+  //      (See migration 0008.)
+  const jobsMatch = domain.match(
+    /^(indeed|ziprecruiter|glassdoor|monster|simplyhired|linkedin)\.com$/,
+  );
+  if (jobsMatch) {
+    return { kind: "other", brand: `jobs:${jobsMatch[1]}` };
   }
 
   // 9. Default — UNCLASSIFIED, not agent_site. The previous default

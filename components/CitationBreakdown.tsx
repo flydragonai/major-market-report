@@ -28,12 +28,10 @@ export const KIND_COLOR: Record<CitationKind, string> = {
   // the "paid placement disguised as editorial" bucket and clients ask
   // about it as its own thing.
   listicle: "rgb(251 113 133)",     // rose-400
-  wiki: "rgb(148 163 184)",         // slate
-  // New buckets introduced when we switched the classifier default away
-  // from agent_site — pick distinct hues so the donut legend doesn't
-  // bleed them into adjacent colors.
+  // Surfaced when we switched the classifier default away from
+  // agent_site — distinct hue so the donut legend doesn't bleed it
+  // into adjacent colors.
   government: "rgb(120 113 108)",   // stone — neutral-but-readable for gov
-  jobs: "rgb(202 138 4)",           // amber-700 — distinct from pr's softer amber
   unclassified: "rgb(212 212 216)", // zinc-300 — visually muted so the eye
                                     // reads it as "needs work" rather than a
                                     // first-class category
@@ -56,9 +54,7 @@ export const KIND_ORDER: CitationKind[] = [
   "directory",
   "pr",
   "listicle",
-  "wiki",
   "government",
-  "jobs",
   "other",
   "unclassified",
 ];
