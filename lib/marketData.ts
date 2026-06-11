@@ -104,6 +104,22 @@ export type UnclassifiedDomain = {
   sampleTitle: string | null;
 };
 
+/** Cited domain row for the /citations management page. One entry per
+ *  distinct registrable domain seen across every complete run. `kind` is
+ *  the EFFECTIVE kind (operator override wins over classifier registry),
+ *  and `hasOverride` lets the UI flag rows the operator has already
+ *  manually decided so they're visually distinct from the classifier's
+ *  guesses. */
+export type DomainCatalogRow = {
+  domain: string;
+  count: number;
+  sampleUrl: string;
+  sampleTitle: string | null;
+  kind: import("./citations/categories").CitationKind;
+  brand: string | null;
+  hasOverride: boolean;
+};
+
 export async function loadMarketReport(): Promise<MarketReport> {
   const sb = mmrClient();
 
@@ -289,6 +305,99 @@ function applyOne(
     brand: override?.brand ?? brand,
     model,
   };
+}
+
+/**
+ * Loader for the /citations domain-management page. Scans every
+ * complete (non-archived) run's citations and returns one row per
+ * distinct domain — with the EFFECTIVE classification (operator
+ * override wins over the hardcoded registry) and a flag for whether
+ * the row is an override or a classifier guess.
+ *
+ * Doesn't share loadMarketReport's pipeline because we don't need
+ * agent aggregation, per-market splits, or top-domains computation
+ * here — just citations grouped by domain. Keeps the page render
+ * cheap when the operator is bulk-classifying.
+ */
+export async function loadDomainCatalog(): Promise<DomainCatalogRow[]> {
+  const sb = mmrClient();
+  const overrides = await loadDomainOverrides();
+
+  const { data: runRows, error: runErr } = await sb
+    .from("mmr_runs")
+    .select("run_id")
+    .eq("status", "complete")
+    .eq("archived", false);
+  if (runErr) {
+    throw new Error(`loadDomainCatalog runs: ${runErr.message}`);
+  }
+  const runIds = (runRows ?? []).map((r) => (r as { run_id: string }).run_id);
+
+  const responses = await fetchInChunks(runIds, IN_CHUNK_SIZE, async (chunk) => {
+    const { data, error } = await sb
+      .from("mmr_responses")
+      .select("status, citations")
+      .in("run_id", chunk);
+    if (error) {
+      throw new Error(`loadDomainCatalog responses: ${error.message}`);
+    }
+    return (data ?? []) as Array<{ status: string; citations: unknown }>;
+  });
+
+  // Group raw citations by normalized domain, tallying counts and
+  // capturing a sample URL/title for the operator to spot-check
+  // before classifying. Classifier kind is sampled from the first
+  // citation we see for a domain — classifier is deterministic per
+  // (url, domain, title), and all rows for one domain converge on
+  // the same kind/brand in practice, so first-seen is correct.
+  const acc = new Map<
+    string,
+    {
+      count: number;
+      sampleUrl: string;
+      sampleTitle: string | null;
+      classifierKind: import("./citations/categories").CitationKind;
+      classifierBrand: string | null;
+    }
+  >();
+  for (const row of responses) {
+    if (row.status === "error") continue;
+    if (!Array.isArray(row.citations)) continue;
+    for (const c of row.citations as Citation[]) {
+      const d = (c.domain ?? "").toLowerCase().replace(/^www\./, "");
+      if (!d) continue;
+      const e = acc.get(d);
+      if (e) {
+        e.count += 1;
+      } else {
+        const { kind, brand } = classifyCitation(c);
+        acc.set(d, {
+          count: 1,
+          sampleUrl: c.url,
+          sampleTitle: c.title,
+          classifierKind: kind,
+          classifierBrand: brand,
+        });
+      }
+    }
+  }
+
+  return Array.from(acc.entries())
+    .map(([domain, v]) => {
+      const override = applyOverride(domain, overrides);
+      return {
+        domain,
+        count: v.count,
+        sampleUrl: v.sampleUrl,
+        sampleTitle: v.sampleTitle,
+        kind: override?.kind ?? v.classifierKind,
+        brand: override?.brand ?? v.classifierBrand,
+        hasOverride: Boolean(override),
+      };
+    })
+    .sort(
+      (a, b) => b.count - a.count || a.domain.localeCompare(b.domain),
+    );
 }
 
 /** Aggregate all unclassified citations across the whole report into a
