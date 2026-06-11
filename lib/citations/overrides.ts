@@ -34,8 +34,17 @@ export async function loadDomainOverrides(): Promise<OverrideMap> {
     }
     const m: OverrideMap = new Map();
     for (const row of data ?? []) {
+      // Coalesce dead kinds before they reach the renderer. `local_media`
+      // was collapsed into `pr` (see migration 0007); if a deploy gets
+      // ahead of the migration apply (or someone restores an older DB),
+      // an unmapped kind here would produce undefined colors/labels
+      // downstream. Cheap defensive rewrite on read keeps the page
+      // rendering correctly even mid-migration.
+      const rawKind = row.kind as string;
+      const kind: CitationKind =
+        rawKind === "local_media" ? "pr" : (rawKind as CitationKind);
       m.set(row.domain as string, {
-        kind: row.kind as CitationKind,
+        kind,
         brand: (row.brand as string | null) ?? null,
       });
     }

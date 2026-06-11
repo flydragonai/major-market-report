@@ -29,7 +29,6 @@ export type CitationKind =
   | "pr"
   | "listicle"
   | "social"
-  | "local_media"
   | "industry_news"
   | "wiki"
   | "government"
@@ -49,7 +48,6 @@ export const SELECTABLE_KINDS: CitationKind[] = [
   "review",
   "pr",
   "social",
-  "local_media",
   "industry_news",
   "wiki",
   "video",
@@ -88,10 +86,17 @@ export const CITATION_KIND_LABEL: Record<CitationKind, string> = {
   video: "Video",
   review: "Review",
   directory: "Directory / aggregator",
-  pr: "PR / press",
+  // `pr` is the combined press bucket: both wire-placed (PRNewswire,
+  // BusinessWire, etc.) AND editorial regional press (Boston Globe,
+  // bizjournals, patch.com). Earlier the latter was its own
+  // `local_media` kind — we collapsed it in because the report's
+  // primary question is "did the model cite a press source" and the
+  // earned-vs-placed distinction wasn't load-bearing in practice.
+  // Brand prefixes (e.g. "wire:prnewswire" vs "editorial:bostonglobe")
+  // are preserved at write time if a future split needs them.
+  pr: "Press / PR",
   listicle: "Listicle / guest post",
   social: "Social",
-  local_media: "Local media",
   industry_news: "Industry news",
   wiki: "Wikipedia",
   government: "Government / housing authority",
@@ -287,9 +292,10 @@ const DIRECTORY_DOMAINS: Record<string, string> = {
 };
 
 /**
- * Press-release wires + syndication endpoints. These carry agent-placed PR
- * (the agent paid to publish), not editorial coverage — tracked separately
- * from local_media so the report can distinguish earned vs placed press.
+ * Press-release wires + syndication endpoints. Routes to the unified
+ * `pr` bucket along with EDITORIAL_PRESS_DOMAINS below. Kept as a
+ * separate registry so brand slugs document the wire-vs-editorial
+ * split even though the report doesn't surface it as two slices today.
  */
 const PR_DOMAINS: Record<string, string> = {
   "newswire.com": "newswire",
@@ -329,11 +335,13 @@ const LEGAL_DOMAINS: Record<string, string> = {
 
 /**
  * Local / city magazines + regional publications that run editorial "top
- * agents" features. Distinct from the generic LOCAL_MEDIA_PATTERNS below —
- * these named titles wouldn't match the suffix patterns. Subdomain keys roll
- * up (prestonhollow.advocatemag.com → advocatemag.com).
+ * agents" features. Routes to the unified `pr` bucket — earned editorial
+ * press lives in the same slice as wire-placed PR. Distinct from the
+ * generic EDITORIAL_PRESS_PATTERNS below — these named titles wouldn't
+ * match the suffix patterns. Subdomain keys roll up
+ * (prestonhollow.advocatemag.com → advocatemag.com).
  */
-const LOCAL_MEDIA_DOMAINS: Record<string, string> = {
+const EDITORIAL_PRESS_DOMAINS: Record<string, string> = {
   "washingtonian.com": "washingtonian",
   "advocatemag.com": "advocatemag",
   "planomagazine.com": "plano_magazine",
@@ -353,12 +361,14 @@ const LOCAL_MEDIA_DOMAINS: Record<string, string> = {
 /**
  * Real-estate trade press — editorial publications whose entire reason
  * for existing is to cover the industry. Carries earned-media weight that
- * `pr` (wire placements) and `listicle` (paid "Top 10 Agents" posts)
- * don't, and a strategically different audience from `local_media` (the
- * general regional press that occasionally runs an agent profile).
+ * `pr` (wire placements + regional press) and `listicle` (paid "Top 10
+ * Agents" posts) don't, and a strategically different audience from the
+ * generic press bucket that now contains both wires and local
+ * editorial.
  *
- * If a client appears in The Real Deal vs Patch.com, those are very
- * different wins — the donut needs to split them.
+ * Inman vs Patch.com are very different wins — `industry_news` exists
+ * so the donut keeps trade press visually distinct from the rolled-up
+ * `pr` bucket.
  */
 const INDUSTRY_NEWS_DOMAINS: Record<string, string> = {
   // National / cross-market trade press
@@ -387,8 +397,8 @@ const INDUSTRY_NEWS_DOMAINS: Record<string, string> = {
  * publisher, same editorial format, one regex covers all current and
  * future cities (atlanta-, houston-, dallas-, phillyagentmagazine.com,
  * …). These are trade publications written for and about agents, not
- * general-audience local news — they belong in industry_news, not
- * local_media.
+ * general-audience press — they belong in industry_news, not the
+ * generic `pr` bucket.
  */
 const INDUSTRY_NEWS_PATTERNS: RegExp[] = [
   /(^|\.)[a-z]+agentmagazine\.com$/, // Agent Publishing city-magazine franchise
@@ -411,10 +421,11 @@ const WIKI_DOMAINS: Record<string, string> = {
 };
 
 /**
- * Heuristic patterns for local media / news. Not exhaustive — additions
- * welcome as they show up in real data. Order matters: more specific first.
+ * Heuristic patterns for editorial regional press / news. Routes to the
+ * unified `pr` bucket. Not exhaustive — additions welcome as they show
+ * up in real data. Order matters: more specific first.
  */
-const LOCAL_MEDIA_PATTERNS: RegExp[] = [
+const EDITORIAL_PRESS_PATTERNS: RegExp[] = [
   /(^|\.)patch\.com$/,
   /(^|\.)axios\.com$/,
   /(^|\.)bizjournals\.com$/,
@@ -516,15 +527,18 @@ export function classifyCitation(c: {
   }
 
   // 5b. PR wires / syndication — known wire domains, OR any /press-release/
-  //     URL path. Syndicated PR shows up on local-news domains too (e.g.
-  //     desmoinesregister.com/press-release/story/...), so the path is a
-  //     stronger signal than the host and is checked before local_media.
+  //     URL path. Syndicated PR shows up on regional-news domains too
+  //     (e.g. desmoinesregister.com/press-release/story/...), so the path
+  //     is a stronger signal than the host and is checked before the
+  //     editorial-press registries (which would otherwise classify the
+  //     host as plain `pr`-as-editorial and lose the wire signal in the
+  //     brand slug).
   const pr = lookupWithRollup(domain, PR_DOMAINS);
   if (pr) {
-    return { kind: "pr", brand: pr };
+    return { kind: "pr", brand: `wire:${pr}` };
   }
   if (/\/press[-_]?releases?\//i.test(c.url)) {
-    return { kind: "pr", brand: null };
+    return { kind: "pr", brand: "wire:syndicated" };
   }
 
   // 5c. Legal directories (probate-query noise) → other, not agent_site
@@ -547,12 +561,12 @@ export function classifyCitation(c: {
     return { kind: "portal", brand: portal };
   }
 
-  // 7a. Industry news — real-estate trade press. Checked BEFORE
-  //     local_media so the Agent Publishing franchise
+  // 7a. Industry news — real-estate trade press. Checked BEFORE the
+  //     editorial-press registries so the Agent Publishing franchise
   //     (bostonagentmagazine.com etc.) doesn't get pulled into the
-  //     local_media regex via its `*magazine.com` suffix, and so The
-  //     Real Deal lands as trade press rather than "local" in any
-  //     market.
+  //     generic editorial-press regex via its `*magazine.com` suffix,
+  //     and so The Real Deal lands as trade press rather than rolling
+  //     up into the generic `pr` bucket.
   const industry = lookupWithRollup(domain, INDUSTRY_NEWS_DOMAINS);
   if (industry) {
     return { kind: "industry_news", brand: industry };
@@ -563,14 +577,19 @@ export function classifyCitation(c: {
     }
   }
 
-  // 8. Local media — named publications first, then suffix patterns.
-  const localMedia = lookupWithRollup(domain, LOCAL_MEDIA_DOMAINS);
-  if (localMedia) {
-    return { kind: "local_media", brand: localMedia };
+  // 8. Editorial press — named regional publications first, then suffix
+  //    patterns. Routes to the unified `pr` bucket (was its own
+  //    `local_media` kind before; collapsed because the report's
+  //    primary question is "did the model cite a press source" and the
+  //    earned-vs-placed split wasn't load-bearing). Brand prefix
+  //    "editorial:" preserves the distinction for any future split.
+  const editorial = lookupWithRollup(domain, EDITORIAL_PRESS_DOMAINS);
+  if (editorial) {
+    return { kind: "pr", brand: `editorial:${editorial}` };
   }
-  for (const pattern of LOCAL_MEDIA_PATTERNS) {
+  for (const pattern of EDITORIAL_PRESS_PATTERNS) {
     if (pattern.test(domain)) {
-      return { kind: "local_media", brand: null };
+      return { kind: "pr", brand: "editorial:regional" };
     }
   }
 
