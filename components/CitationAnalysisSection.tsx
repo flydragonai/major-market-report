@@ -6,6 +6,7 @@ import {
   aggregateTopDomains,
   type CitedDomain,
 } from "@/lib/citations/topDomains";
+import type { CitationKind } from "@/lib/citations/categories";
 import { CitationCard } from "./CitationCard";
 import { TopCitedDomainsCard } from "./TopCitedDomainsCard";
 import { PLATFORM_ORDER, PLATFORM_LABEL } from "@/lib/platforms";
@@ -39,6 +40,10 @@ export function CitationAnalysisSection({
   totalRuns: number;
 }) {
   const [platform, setPlatform] = useState<string>("all");
+  // Selected citation category. Lifted out of CitationCard so a slice click
+  // filters the "Top cited domains" list on the right instead of opening a
+  // secondary breakdown card under the donut. Click the same slice to clear.
+  const [selectedKind, setSelectedKind] = useState<CitationKind | null>(null);
 
   // Platforms actually present in the data, in stable canonical order.
   // Adding a new LLM upstream lights its pill automatically.
@@ -55,11 +60,16 @@ export function CitationAnalysisSection({
     [citations, platform],
   );
 
-  const domains = useMemo(
-    () =>
-      platform === "all" ? topCitedDomains : aggregateTopDomains(filtered),
-    [platform, filtered, topCitedDomains],
-  );
+  const domains = useMemo(() => {
+    // A selected slice narrows the list to that category's domains; we always
+    // re-aggregate from `filtered` so the bars/shares reflect the slice.
+    if (selectedKind !== null) {
+      return aggregateTopDomains(
+        filtered.filter((c) => c.kind === selectedKind),
+      );
+    }
+    return platform === "all" ? topCitedDomains : aggregateTopDomains(filtered);
+  }, [platform, filtered, topCitedDomains, selectedKind]);
 
   return (
     <div className="border border-zinc-200 rounded-2xl bg-white p-4 sm:p-6">
@@ -84,14 +94,25 @@ export function CitationAnalysisSection({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
         <div className="lg:col-span-1">
-          <CitationCard citations={filtered} totalResults={totalRuns} />
+          <CitationCard
+            citations={filtered}
+            totalResults={totalRuns}
+            selectedKind={selectedKind}
+            onSelectKind={(k) =>
+              setSelectedKind((cur) => (cur === k ? null : k))
+            }
+          />
         </div>
         {/* relative + min-h-0: the donut card on the left sets row height;
             this cell stretches and anchors the absolute domains card so its
             list scrolls within the matched height instead of pushing the
             row taller. */}
         <div className="relative min-h-0 lg:col-span-2">
-          <TopCitedDomainsCard rows={domains} />
+          <TopCitedDomainsCard
+            rows={domains}
+            filterKind={selectedKind}
+            onClearFilter={() => setSelectedKind(null)}
+          />
         </div>
       </div>
     </div>

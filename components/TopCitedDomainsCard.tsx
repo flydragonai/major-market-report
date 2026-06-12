@@ -16,24 +16,50 @@ import type { CitedDomain } from "@/lib/citations/topDomains";
  * Lifted from client-reporting's admin overview verbatim — same shape, same
  * interactions, same compact bucket labels.
  */
-export function TopCitedDomainsCard({ rows }: { rows: CitedDomain[] }) {
+export function TopCitedDomainsCard({
+  rows,
+  filterKind = null,
+  onClearFilter,
+}: {
+  rows: CitedDomain[];
+  /** When set, the list is scoped to this citation category (driven by a
+   *  donut slice click). Shows a clearable chip in the header. */
+  filterKind?: CitationKind | null;
+  onClearFilter?: () => void;
+}) {
   const maxCount = rows[0]?.count ?? 0;
   return (
     <div className="border border-zinc-200 rounded-xl bg-zinc-50 flex flex-col overflow-hidden max-h-[28rem] lg:max-h-none lg:absolute lg:inset-0">
-      <div className="p-5 pb-3 flex items-baseline justify-between">
-        <div
-          className="text-[10px] uppercase tracking-[0.3em] text-zinc-500"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          Top cited domains
+      <div className="p-5 pb-3 flex items-baseline justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div
+            className="text-[10px] uppercase tracking-[0.3em] text-zinc-500"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Top cited domains
+          </div>
+          {filterKind && (
+            <button
+              type="button"
+              onClick={onClearFilter}
+              title="Clear category filter"
+              className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/15 px-2 py-0.5 text-[9px] uppercase tracking-widest text-gold hover:bg-gold/25"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {CITATION_KIND_LABEL[filterKind]}
+              <span className="text-[11px] leading-none">×</span>
+            </button>
+          )}
         </div>
         {rows.length > 0 && (
-          <div className="text-xs text-muted">Top {rows.length}</div>
+          <div className="text-xs text-muted shrink-0">Top {rows.length}</div>
         )}
       </div>
       {rows.length === 0 ? (
         <div className="px-5 pb-5 text-xs text-muted">
-          No citations to summarize.
+          {filterKind
+            ? "No domains in this category for the current view."
+            : "No citations to summarize."}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto min-h-0 px-3 pb-3">

@@ -1,36 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import type { Citation, CitationKind } from "@/lib/citations/categories";
 import { CitationDonut } from "@/components/CitationDonut";
-import { SliceBreakdown } from "@/components/SliceBreakdown";
 
 /**
- * Citation-mix donut wrapped with click-to-drill-down. Lifted from the
- * client-reporting admin overview so this app stays in sync with how
- * the team already reads citation shape.
+ * Citation-mix donut. Lifted from the client-reporting admin overview so this
+ * app stays in sync with how the team already reads citation shape.
  *
- * Click any slice → a breakdown panel renders beneath the donut showing
- *   - Agent-owned → URL path buckets (homepage / blog / money page / ...)
- *   - Every other slice → top domains within that slice
- * Click the same slice again, or the × in the panel, to close.
+ * Click any slice → the parent filters the "Top cited domains" list on the
+ * right to that category. Selection is controlled by the parent so the donut
+ * highlight and the filtered list stay in lockstep; click the same slice again
+ * to clear.
  */
 export function CitationCard({
   citations,
   totalResults,
+  selectedKind,
+  onSelectKind,
 }: {
   citations: Citation[];
   totalResults: number;
+  /** Currently selected slice, lifted to the parent so it can filter the
+   *  adjacent domains list. */
+  selectedKind: CitationKind | null;
+  /** Toggle handler — called with the clicked kind. */
+  onSelectKind: (kind: CitationKind) => void;
 }) {
-  const [selectedKind, setSelectedKind] = useState<CitationKind | null>(null);
-  const sliceCitations = useMemo(
-    () =>
-      selectedKind === null
-        ? []
-        : citations.filter((c) => c.kind === selectedKind),
-    [selectedKind, citations],
-  );
-
   return (
     <div className="border border-zinc-200 rounded-xl p-5 bg-zinc-50">
       <div className="flex items-baseline justify-between mb-3">
@@ -48,17 +43,8 @@ export function CitationCard({
         citations={citations}
         bare
         selectedKind={selectedKind}
-        onSelectKind={(k) =>
-          setSelectedKind((cur) => (cur === k ? null : k))
-        }
+        onSelectKind={onSelectKind}
       />
-      {selectedKind !== null && sliceCitations.length > 0 && (
-        <SliceBreakdown
-          kind={selectedKind}
-          citations={sliceCitations}
-          onClose={() => setSelectedKind(null)}
-        />
-      )}
     </div>
   );
 }
