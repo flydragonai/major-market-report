@@ -76,6 +76,16 @@ export type AgentRow = {
   marketSlugs: string[];
 };
 
+/** Per-platform tally for the SummaryCards "Queries by platform" card. */
+export type PlatformQueryCount = {
+  /** Model slug — "openai" / "gemini" / "google_aio". UI maps to display
+   *  label via PLATFORM_LABEL in CitationAnalysisSection. */
+  model: string;
+  /** Count of non-error response rows for this model in the bucket's
+   *  scope (cross-market for `all`, this-market only for per-market). */
+  count: number;
+};
+
 export type MarketBucket = {
   market: Market;
   resultCount: number;
@@ -87,6 +97,9 @@ export type MarketBucket = {
    *  platform's citation universe. */
   topCitedDomains: CitedDomain[];
   agents: AgentRow[];
+  /** Per-platform response counts in this bucket's scope. Drives the
+   *  "Queries by platform" summary card. Sorted desc by count. */
+  perPlatformQueries: PlatformQueryCount[];
 };
 
 export type MarketReport = {
@@ -234,10 +247,16 @@ function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
   >();
   const citations: CitationCite[] = [];
   const resultIds = new Set<string>();
+  // Per-model response counts. Each RankedListRow is one (run × model
+  // × query) tuple by construction (see loadMarketReport step 4), so
+  // tallying rows by model gives us exactly "queries run per platform"
+  // — no double-counting from citation arrays.
+  const perModelCount = new Map<string, number>();
 
   for (const row of rows) {
     resultIds.add(row.runId);
     citations.push(...row.citations);
+    perModelCount.set(row.model, (perModelCount.get(row.model) ?? 0) + 1);
     for (const a of row.ranked) {
       const rawName = a.name?.trim();
       if (!rawName) continue;
@@ -279,6 +298,12 @@ function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
     }))
     .sort(rankAgent);
 
+  const perPlatformQueries: PlatformQueryCount[] = Array.from(
+    perModelCount.entries(),
+  )
+    .map(([model, count]) => ({ model, count }))
+    .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model));
+
   return {
     market: scope ?? syntheticAllMarket(),
     resultCount: resultIds.size,
@@ -286,6 +311,7 @@ function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
     citations,
     topCitedDomains: aggregateTopDomains(citations),
     agents,
+    perPlatformQueries,
   };
 }
 

@@ -26,7 +26,22 @@ import { createPortal } from "react-dom";
  *   - Scroll / resize     → reposition while open so the bubble tracks
  *                           the trigger
  */
-export function HoverHint({ text }: { text: string }) {
+/**
+ * Pass `text` for a plain-string bubble (existing call sites). Pass
+ * `children` instead when you need rich content — bulleted lists, links,
+ * a structured breakdown. When both are passed, `children` wins.
+ * `ariaLabel` is required when using `children` since we can't auto-
+ * derive a screen-reader label from arbitrary ReactNode.
+ */
+export function HoverHint({
+  text,
+  children,
+  ariaLabel,
+}: {
+  text?: string;
+  children?: React.ReactNode;
+  ariaLabel?: string;
+}) {
   const [hover, setHover] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -111,7 +126,7 @@ export function HoverHint({ text }: { text: string }) {
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        aria-label={`More info: ${text}`}
+        aria-label={ariaLabel ?? (text ? `More info: ${text}` : "More info")}
         aria-expanded={open}
         className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-zinc-300 text-[9px] leading-none text-zinc-500 cursor-help hover:border-zinc-400 hover:text-zinc-700 focus:outline-none focus:ring-1 focus:ring-zinc-400"
       >
@@ -130,7 +145,7 @@ export function HoverHint({ text }: { text: string }) {
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
           >
-            {text}
+            {children ?? text}
           </div>,
           document.body,
         )}

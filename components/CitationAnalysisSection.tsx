@@ -8,6 +8,7 @@ import {
 } from "@/lib/citations/topDomains";
 import { CitationCard } from "./CitationCard";
 import { TopCitedDomainsCard } from "./TopCitedDomainsCard";
+import { PLATFORM_ORDER, PLATFORM_LABEL } from "@/lib/platforms";
 
 /**
  * Citation Analysis hero — the operator's first look at the page. Platform
@@ -123,19 +124,5 @@ function Pill({
   );
 }
 
-/** Canonical model display order — matches client-reporting's
- *  MODEL_DISPLAY_ORDER. Claude (anthropic) sits last because it's the
- *  tier-2 add-on. */
-const PLATFORM_ORDER = [
-  "openai",
-  "gemini",
-  "google_aio",
-  "anthropic",
-] as const;
-
-const PLATFORM_LABEL: Record<string, string> = {
-  openai: "ChatGPT",
-  gemini: "Gemini",
-  google_aio: "Google AIO",
-  anthropic: "Claude",
-};
+// PLATFORM_ORDER / PLATFORM_LABEL moved to lib/platforms.ts — shared
+// with SummaryCards so the registry has one source of truth.

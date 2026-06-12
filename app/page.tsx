@@ -6,9 +6,11 @@ import { CitationAnalysisSection } from "@/components/CitationAnalysisSection";
 import { MarketLeaderboard } from "@/components/MarketLeaderboard";
 import { RunScoringButton } from "@/components/RunScoringButton";
 import { RunStatusBadge } from "@/components/RunStatusBadge";
+import { SummaryCards } from "@/components/SummaryCards";
 import { UnclassifiedDomains } from "@/components/UnclassifiedDomains";
 import { getActiveRunStatus } from "@/lib/runStatus";
 import { unclassifiedDomains } from "@/lib/marketData";
+import { buildQuerySet } from "@/lib/llms/querySet";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,15 @@ export default async function MajorMarketReport({
         report.all);
   const isAll = active.market.slug === "all";
 
+  // Core query templates with `{market}` left as a literal placeholder
+  // so the SummaryCards `?` popover shows the shape, not a specific
+  // market's rendered query. Resolved at request time (force-dynamic)
+  // so the embedded date anchor reflects the current month.
+  const coreQueryTemplates = buildQuerySet("{market}", null).map((q) => q.text);
+  const summaryScopeLabel = isAll
+    ? `Across all ${MARKETS.length} markets`
+    : active.market.label;
+
   return (
     <main className="min-h-screen px-4 sm:px-6 py-10 max-w-7xl mx-auto">
       <header className="mb-8">
@@ -70,6 +81,16 @@ export default async function MajorMarketReport({
           mentions.
         </p>
       </header>
+
+      <section className="mb-6">
+        <SummaryCards
+          totalQueries={active.responseCount}
+          totalCitations={active.citations.length}
+          perPlatformQueries={active.perPlatformQueries}
+          queryTemplates={coreQueryTemplates}
+          scopeLabel={summaryScopeLabel}
+        />
+      </section>
 
       <section className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <MarketPills
