@@ -71,9 +71,26 @@ export function HoverHint({
   }, []);
 
   // Hoisted so the ResizeObserver below can call the same routine.
-  // Reads the trigger's viewport rect + the bubble's actual measured
-  // width, then anchors below the trigger and clamps so the bubble
-  // never extends past the viewport edge. Falls back to a 280-px
+  //
+  // Direction picked from the trigger's position in the viewport:
+  //   - Trigger in the LEFT half  → anchor bubble's left edge to
+  //     trigger's left edge, grow rightward (matches the historic
+  //     behavior for left-sided hints).
+  //   - Trigger in the RIGHT half → anchor bubble's right edge to
+  //     trigger's right edge, grow leftward.
+  //
+  // The right-side branch is the new one. Previously every hint grew
+  // rightward and we tried to clamp the bubble back inside the
+  // viewport when it overflowed — but the clamp depended on knowing
+  // the bubble's measured width at place-time, which is a moving
+  // target for content-rich hints (long bulleted lists wrap to
+  // different widths as the browser commits layout). Anchoring the
+  // RIGHT edge of the bubble to a point inside the viewport
+  // guarantees no right-overflow regardless of how the content
+  // ultimately measures.
+  //
+  // Each branch still guards its opposite edge so the bubble can't
+  // run off the OTHER side on a tiny viewport. Falls back to a 280-px
   // estimate before the bubble exists; the ResizeObserver re-calls
   // this with the real width as soon as content lays out.
   const place = useCallback(() => {
@@ -82,9 +99,23 @@ export function HoverHint({
     const r = trigger.getBoundingClientRect();
     const bubbleW = bubbleRef.current?.offsetWidth ?? 280;
     const margin = 8;
-    let left = r.left;
-    if (left + bubbleW > window.innerWidth - margin) {
-      left = Math.max(margin, window.innerWidth - bubbleW - margin);
+    const triggerCenter = r.left + r.width / 2;
+    const openLeftward = triggerCenter > window.innerWidth / 2;
+
+    let left: number;
+    if (openLeftward) {
+      // Anchor bubble's right edge to trigger's right edge, grow left.
+      left = r.right - bubbleW;
+      // Guard left-edge overflow on narrow viewports.
+      left = Math.max(margin, left);
+    } else {
+      // Anchor bubble's left edge to trigger's left edge, grow right.
+      left = r.left;
+      // Guard right-edge overflow if a content-rich bubble somehow
+      // ends up wider than the viewport from a left-side trigger.
+      if (left + bubbleW > window.innerWidth - margin) {
+        left = Math.max(margin, window.innerWidth - bubbleW - margin);
+      }
     }
     setPos({ top: r.bottom + 4, left });
   }, []);
