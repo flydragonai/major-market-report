@@ -99,8 +99,8 @@ export function SummaryCards({
         label={
           <span className="inline-flex items-baseline gap-1">
             Queries by platform
-            <HoverHint ariaLabel="Query templates">
-              <div className="max-w-sm">
+            <HoverHint ariaLabel="Query templates" wide>
+              <div>
                 <div className="font-semibold mb-1 text-foreground">
                   Core query templates
                 </div>

@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -32,15 +38,22 @@ import { createPortal } from "react-dom";
  * a structured breakdown. When both are passed, `children` wins.
  * `ariaLabel` is required when using `children` since we can't auto-
  * derive a screen-reader label from arbitrary ReactNode.
+ *
+ * `wide` opts the bubble into a larger max-width (440 vs 320) for
+ * content-rich hints — bulleted query templates, multi-line
+ * explanations, etc. — where the default xs cap forces awkward 3-line
+ * wraps on every list item.
  */
 export function HoverHint({
   text,
   children,
   ariaLabel,
+  wide = false,
 }: {
   text?: string;
   children?: React.ReactNode;
   ariaLabel?: string;
+  wide?: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -57,25 +70,30 @@ export function HoverHint({
     setMounted(true);
   }, []);
 
-  // Position the bubble under the trigger in viewport coordinates. If the
-  // bubble's right edge would clip past the viewport we shift it left so it
-  // stays fully visible. Re-runs on every show + on scroll/resize while open.
+  // Hoisted so the ResizeObserver below can call the same routine.
+  // Reads the trigger's viewport rect + the bubble's actual measured
+  // width, then anchors below the trigger and clamps so the bubble
+  // never extends past the viewport edge. Falls back to a 280-px
+  // estimate before the bubble exists; the ResizeObserver re-calls
+  // this with the real width as soon as content lays out.
+  const place = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    const bubbleW = bubbleRef.current?.offsetWidth ?? 280;
+    const margin = 8;
+    let left = r.left;
+    if (left + bubbleW > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - bubbleW - margin);
+    }
+    setPos({ top: r.bottom + 4, left });
+  }, []);
+
+  // Initial placement + reposition on scroll/resize while open.
   useLayoutEffect(() => {
     if (!open) {
       setPos(null);
       return;
-    }
-    function place() {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-      const r = trigger.getBoundingClientRect();
-      const bubbleW = bubbleRef.current?.offsetWidth ?? 280;
-      const margin = 8;
-      let left = r.left;
-      if (left + bubbleW > window.innerWidth - margin) {
-        left = Math.max(margin, window.innerWidth - bubbleW - margin);
-      }
-      setPos({ top: r.bottom + 4, left });
     }
     place();
     window.addEventListener("scroll", place, true);
@@ -84,7 +102,24 @@ export function HoverHint({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [open]);
+  }, [open, place]);
+
+  // ResizeObserver re-positions whenever the bubble's measured size
+  // changes. CRITICAL for content-rich hints: the first useLayoutEffect
+  // runs BEFORE the portal mounts, so bubbleRef is null and the placement
+  // uses the 280-px estimate. Without this observer, a 440-px-wide
+  // template-list bubble anchored at the trigger's `left` would extend
+  // past the viewport edge with no clamp ever firing. The observer fires
+  // as soon as the portal lays out, place() reads the real width, and
+  // the bubble shifts left.
+  useEffect(() => {
+    if (!open) return;
+    const node = bubbleRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => place());
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [open, place]);
 
   // Click-outside + Escape — only relevant when the bubble is pinned, since
   // hover/focus close themselves on the matching out event. Outside is
@@ -140,7 +175,9 @@ export function HoverHint({
             style={{ position: "fixed", top: pos.top, left: pos.left }}
             // z-[60] sits above the run-details modal (z-50) and any sticky
             // headers in the page chrome.
-            className="z-[60] max-w-xs w-max rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-foreground shadow-lg whitespace-normal leading-snug pointer-events-auto"
+            className={`z-[60] w-max rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-foreground shadow-lg whitespace-normal leading-snug pointer-events-auto ${
+              wide ? "max-w-[440px]" : "max-w-xs"
+            }`}
             onClick={(e) => e.stopPropagation()}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
