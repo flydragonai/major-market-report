@@ -66,7 +66,7 @@ function Pill({
       prefetch={false}
       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs uppercase tracking-widest transition-colors ${
         active
-          ? "bg-zinc-900 text-zinc-50 border-zinc-900"
+          ? "bg-gold/15 text-gold border-gold/40"
           : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300 hover:text-foreground"
       }`}
       style={{ fontFamily: "var(--font-display)" }}
@@ -75,7 +75,7 @@ function Pill({
       <span
         className={`tabular-nums text-[10px] px-1.5 py-0.5 rounded-full ${
           active
-            ? "bg-white/15 text-zinc-100"
+            ? "bg-gold/20 text-gold"
             : "bg-zinc-100 text-zinc-500"
         }`}
       >

@@ -2,8 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { loadMarketReport } from "@/lib/marketData";
 import { MARKETS, marketBySlug } from "@/lib/markets";
 import { MarketPills } from "@/components/MarketPills";
-import { CitationAnalysisSection } from "@/components/CitationAnalysisSection";
-import { MarketLeaderboard } from "@/components/MarketLeaderboard";
+import { PlatformScopedReport } from "@/components/PlatformScopedReport";
 import { RunScoringButton } from "@/components/RunScoringButton";
 import { RunStatusBadge } from "@/components/RunStatusBadge";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -77,66 +76,55 @@ export default async function MajorMarketReport({
         <p className="text-sm text-zinc-600 mt-3 max-w-3xl">
           Who AI keeps recommending across the {MARKETS.length} markets we
           track. Citation mix shows which sources LLMs lean on; the
-          leaderboard ranks every agent the LLMs returned, by total AI
-          mentions.
+          leaderboard ranks every agent the LLMs returned, by how often AI
+          makes them the #1 pick.
         </p>
       </header>
 
-      <section className="mb-6">
-        <SummaryCards
-          totalQueries={active.responseCount}
-          totalCitations={active.citations.length}
-          totalAgents={active.agents.length}
-          perPlatformQueries={active.perPlatformQueries}
-          queryTemplates={coreQueryTemplates}
-          scopeLabel={summaryScopeLabel}
-        />
-      </section>
-
-      <section className="mb-8 flex flex-wrap items-center justify-between gap-3">
-        <MarketPills
-          markets={MARKETS}
-          countsBySlug={countsBySlug}
-          selectedSlug={requestedSlug}
-        />
-        <div className="flex items-center gap-3">
-          {activeRunStatus && <RunStatusBadge status={activeRunStatus} />}
-          <RunScoringButton
-            slug={requestedSlug}
-            label={active.market.label}
-            disabled={Boolean(activeRunStatus)}
-          />
-        </div>
-      </section>
-
-      <section className="mb-10">
-        <CitationAnalysisSection
-          citations={active.citations}
-          topCitedDomains={active.topCitedDomains}
-          totalRuns={active.resultCount}
-        />
-      </section>
-
-      <section className="mb-10">
-        <div className="border border-zinc-200 rounded-2xl bg-white p-4 sm:p-6">
-          <div className="flex items-baseline justify-between mb-4">
-            <h2
-              className="text-xl"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              Agent leaderboard
-            </h2>
-            <div className="text-xs text-muted">
-              Ranked by mentions · ties broken by Top 3 → #1
+      <PlatformScopedReport
+        marketFilter={
+          <div className="flex items-start justify-between gap-3">
+            <div className="grid grid-cols-[5.5rem_1fr] items-baseline gap-2 flex-1 min-w-0">
+              <span
+                className="text-[10px] uppercase tracking-[0.3em] text-zinc-500"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                Markets
+              </span>
+              <MarketPills
+                markets={MARKETS}
+                countsBySlug={countsBySlug}
+                selectedSlug={requestedSlug}
+              />
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              {activeRunStatus && <RunStatusBadge status={activeRunStatus} />}
+              <RunScoringButton
+                slug={requestedSlug}
+                label={active.market.label}
+                disabled={Boolean(activeRunStatus)}
+              />
             </div>
           </div>
-          <MarketLeaderboard
-            agents={active.agents}
-            markets={MARKETS}
-            showMarketChips={isAll}
+        }
+        summary={
+          <SummaryCards
+            totalQueries={active.responseCount}
+            totalCitations={active.citations.length}
+            totalAgents={active.agents.length}
+            perPlatformQueries={active.perPlatformQueries}
+            queryTemplates={coreQueryTemplates}
+            scopeLabel={summaryScopeLabel}
           />
-        </div>
-      </section>
+        }
+        citations={active.citations}
+        topCitedDomains={active.topCitedDomains}
+        totalRuns={active.resultCount}
+        agents={active.agents}
+        agentsByPlatform={active.agentsByPlatform}
+        markets={MARKETS}
+        showMarketChips={isAll}
+      />
 
       <section className="mb-10">
         <UnclassifiedDomains rows={unclassifiedDomains(active.citations)} />

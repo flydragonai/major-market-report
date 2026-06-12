@@ -46,9 +46,9 @@ export function MarketLeaderboard({
         <div className="text-right">#</div>
         <div></div>
         <div>Agent</div>
-        <div className="text-right">Mentions</div>
-        <div className="text-right">Top 3</div>
         <div className="text-right">#1</div>
+        <div className="text-right">Top 3</div>
+        <div className="text-right">Mentions</div>
       </div>
       <ol className="divide-y divide-zinc-100">
         {shown.map((a, i) => (
@@ -94,10 +94,10 @@ export function MarketLeaderboard({
               )}
             </div>
             <div
-              className="text-right text-sm tabular-nums"
+              className="text-right text-sm tabular-nums text-emerald-700"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              {a.mentions}
+              {a.top1 > 0 ? a.top1 : "—"}
             </div>
             <div
               className="text-right text-sm tabular-nums text-emerald-700"
@@ -106,10 +106,10 @@ export function MarketLeaderboard({
               {a.top3 > 0 ? a.top3 : "—"}
             </div>
             <div
-              className="text-right text-sm tabular-nums text-emerald-700"
+              className="text-right text-sm tabular-nums text-muted"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              {a.top1 > 0 ? a.top1 : "—"}
+              {a.mentions}
             </div>
           </li>
         ))}

@@ -97,6 +97,12 @@ export type MarketBucket = {
    *  platform's citation universe. */
   topCitedDomains: CitedDomain[];
   agents: AgentRow[];
+  /** Same leaderboard re-tallied per platform, keyed by model slug
+   *  ("openai" / "gemini" / "google_aio"). Drives the shared platform
+   *  filter: selecting a platform swaps `agents` for the matching list so
+   *  the leaderboard ranks only that LLM's recommendations. The "all"
+   *  view uses `agents` above. */
+  agentsByPlatform: Record<string, AgentRow[]>;
   /** Per-platform response counts in this bucket's scope. Drives the
    *  "Queries by platform" summary card. Sorted desc by count. */
   perPlatformQueries: PlatformQueryCount[];
@@ -227,6 +233,55 @@ export async function loadMarketReport(): Promise<MarketReport> {
 // ---------- Aggregation ----------
 
 function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
+  const citations: CitationCite[] = [];
+  const resultIds = new Set<string>();
+  // Per-model response counts. Each RankedListRow is one (run × model
+  // × query) tuple by construction (see loadMarketReport step 4), so
+  // tallying rows by model gives us exactly "queries run per platform"
+  // — no double-counting from citation arrays.
+  const perModelCount = new Map<string, number>();
+
+  for (const row of rows) {
+    resultIds.add(row.runId);
+    citations.push(...row.citations);
+    perModelCount.set(row.model, (perModelCount.get(row.model) ?? 0) + 1);
+  }
+
+  // Cross-platform leaderboard plus one re-tally per platform so the shared
+  // filter can swap the ranking to a single LLM's recommendations.
+  const agents = tallyAgents(rows);
+  const agentsByPlatform: Record<string, AgentRow[]> = {};
+  for (const model of perModelCount.keys()) {
+    agentsByPlatform[model] = tallyAgents(
+      rows.filter((r) => r.model === model),
+    );
+  }
+
+  const perPlatformQueries: PlatformQueryCount[] = Array.from(
+    perModelCount.entries(),
+  )
+    .map(([model, count]) => ({ model, count }))
+    .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model));
+
+  return {
+    market: scope ?? syntheticAllMarket(),
+    resultCount: resultIds.size,
+    responseCount: rows.length,
+    citations,
+    topCitedDomains: aggregateTopDomains(citations),
+    agents,
+    agentsByPlatform,
+    perPlatformQueries,
+  };
+}
+
+/**
+ * Roll a set of (run × model × query) rows into a ranked agent leaderboard.
+ * Pulled out of `aggregate` so the same logic produces both the
+ * cross-platform list and each per-platform list (just pass the rows for
+ * one model). Ranking + domain-mode rules are identical across callers.
+ */
+function tallyAgents(rows: RankedListRow[]): AgentRow[] {
   const agentByKey = new Map<
     string,
     {
@@ -245,18 +300,8 @@ function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
       marketSlugs: Set<string>;
     }
   >();
-  const citations: CitationCite[] = [];
-  const resultIds = new Set<string>();
-  // Per-model response counts. Each RankedListRow is one (run × model
-  // × query) tuple by construction (see loadMarketReport step 4), so
-  // tallying rows by model gives us exactly "queries run per platform"
-  // — no double-counting from citation arrays.
-  const perModelCount = new Map<string, number>();
 
   for (const row of rows) {
-    resultIds.add(row.runId);
-    citations.push(...row.citations);
-    perModelCount.set(row.model, (perModelCount.get(row.model) ?? 0) + 1);
     for (const a of row.ranked) {
       const rawName = a.name?.trim();
       if (!rawName) continue;
@@ -287,7 +332,7 @@ function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
     }
   }
 
-  const agents: AgentRow[] = Array.from(agentByKey.values())
+  return Array.from(agentByKey.values())
     .map((v) => ({
       name: v.name,
       domain: modeOfDomain(v.domainCounts),
@@ -297,22 +342,6 @@ function aggregate(rows: RankedListRow[], scope: Market | null): MarketBucket {
       marketSlugs: Array.from(v.marketSlugs).sort(),
     }))
     .sort(rankAgent);
-
-  const perPlatformQueries: PlatformQueryCount[] = Array.from(
-    perModelCount.entries(),
-  )
-    .map(([model, count]) => ({ model, count }))
-    .sort((a, b) => b.count - a.count || a.model.localeCompare(b.model));
-
-  return {
-    market: scope ?? syntheticAllMarket(),
-    resultCount: resultIds.size,
-    responseCount: rows.length,
-    citations,
-    topCitedDomains: aggregateTopDomains(citations),
-    agents,
-    perPlatformQueries,
-  };
 }
 
 /** Classify a single citation: run the hardcoded classifier, then let an
@@ -451,11 +480,13 @@ export function unclassifiedDomains(
     .sort((a, b) => b.count - a.count || a.domain.localeCompare(b.domain));
 }
 
-/** Sort comparator: mentions desc → top3 desc → #1 desc → name asc. */
+/** Sort comparator: #1 desc → top3 desc → mentions desc → name asc.
+ *  Being AI's top pick is the headline signal, so #1 count leads; Top 3
+ *  breaks ties, then raw mention volume, then name for determinism. */
 export function rankAgent(a: AgentRow, b: AgentRow): number {
-  if (b.mentions !== a.mentions) return b.mentions - a.mentions;
-  if (b.top3 !== a.top3) return b.top3 - a.top3;
   if (b.top1 !== a.top1) return b.top1 - a.top1;
+  if (b.top3 !== a.top3) return b.top3 - a.top3;
+  if (b.mentions !== a.mentions) return b.mentions - a.mentions;
   return a.name.localeCompare(b.name);
 }
 
