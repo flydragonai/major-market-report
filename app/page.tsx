@@ -86,6 +86,7 @@ export default async function MajorMarketReport({
         <SummaryCards
           totalQueries={active.responseCount}
           totalCitations={active.citations.length}
+          totalAgents={active.agents.length}
           perPlatformQueries={active.perPlatformQueries}
           queryTemplates={coreQueryTemplates}
           scopeLabel={summaryScopeLabel}

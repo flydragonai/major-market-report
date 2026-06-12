@@ -11,8 +11,8 @@ import type { PlatformQueryCount } from "@/lib/marketData";
  *   1. Queries run        — total non-error response rows (each row is
  *                           one model × query execution).
  *   2. Citations          — total citation entries across all responses.
- *   3. Platforms          — count of distinct models that produced data
- *                           in this scope. `?` reveals which platforms.
+ *   3. Agents ranked      — count of distinct agents named in at least
+ *                           one model's top-list across this scope.
  *   4. Queries / platform — per-model breakdown chips. `?` reveals the
  *                           query template list so an operator (or a
  *                           client peeking) can see exactly what we ask.
@@ -24,12 +24,16 @@ import type { PlatformQueryCount } from "@/lib/marketData";
 export function SummaryCards({
   totalQueries,
   totalCitations,
+  totalAgents,
   perPlatformQueries,
   queryTemplates,
   scopeLabel,
 }: {
   totalQueries: number;
   totalCitations: number;
+  /** Distinct agents on the leaderboard for this scope. Each agent
+   *  counts once regardless of how many models named them. */
+  totalAgents: number;
   perPlatformQueries: PlatformQueryCount[];
   /** Query template strings, with `{market}` left as a literal placeholder
    *  so the operator sees the shape, not a specific market. */
@@ -38,7 +42,6 @@ export function SummaryCards({
    *  so the scope is unambiguous when the user hits the page mid-scroll. */
   scopeLabel: string;
 }) {
-  const platforms = perPlatformQueries.map((p) => p.model);
   // Sort the per-platform chips by the canonical PLATFORM_ORDER so the
   // operator's mental map stays stable across markets even when one
   // model returned more rows than another in a given scope.
@@ -71,28 +74,14 @@ export function SummaryCards({
       <SummaryCard
         label={
           <span className="inline-flex items-baseline gap-1">
-            Platforms
-            <HoverHint ariaLabel="Which platforms">
-              <div>
-                <div className="font-semibold mb-1 text-foreground">
-                  AI platforms tracked
-                </div>
-                {platforms.length === 0 ? (
-                  <div className="text-zinc-500">
-                    No platform data in this scope yet.
-                  </div>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {sortedPlatforms.map((p) => (
-                      <li key={p.model}>· {platformLabel(p.model)}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </HoverHint>
+            Agents ranked
+            <HoverHint
+              ariaLabel="What counts as a ranked agent"
+              text="Distinct agents named in at least one model's ranked list across this scope. Same agent named by multiple models counts once."
+            />
           </span>
         }
-        value={platforms.length.toString()}
+        value={totalAgents.toLocaleString()}
         sublabel={scopeLabel}
       />
       <SummaryCard
